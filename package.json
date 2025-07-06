@@ -1,0 +1,19 @@
+{
+  "name": "@devaloop/prettier-plugin-devalang",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "prettier": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node test/index.js"
+  },
+  "keywords": ["prettier", "plugin", "devalang", "formatting", "code"],
+  "author": "Devaloop",
+  "license": "MIT",
+  "description": "Prettier plugin for Devalang",
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "prettier": "^3.6.2"
+  }
+}
