@@ -1,4 +1,5 @@
 {
+  "private": false,
   "name": "@devaloop/prettier-plugin-devalang",
   "version": "0.0.1",
   "main": "dist/index.js",
@@ -12,7 +13,7 @@
   "author": "Devaloop",
   "license": "MIT",
   "description": "Prettier plugin for Devalang",
-  "devDependencies": {
+  "dependencies": {
     "@types/node": "^24.0.10",
     "prettier": "^3.6.2"
   }
