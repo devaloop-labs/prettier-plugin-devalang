@@ -6,6 +6,8 @@
 ![License](https://img.shields.io/github/license/devaloop-labs/prettier-plugin-devalang)
 [![VSCode Extension](https://img.shields.io/visual-studio-marketplace/v/devaloop.devalang-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=devaloop.devalang-vscode)
 
+![NPM Downloads](https://img.shields.io/npm/dt/@devaloop/prettier-plugin-devalang)
+
 
 # ✨ [Devalang](https://github.com/devaloop-labs/devalang) Prettier plugin
 

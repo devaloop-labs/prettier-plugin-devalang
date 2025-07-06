@@ -1,6 +1,6 @@
 {
-  "private": false,
   "name": "@devaloop/prettier-plugin-devalang",
+  "private": false,
   "version": "0.0.1",
   "main": "dist/index.js",
   "prettier": "dist/index.js",
