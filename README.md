@@ -3,13 +3,13 @@
 </div>
 
 ![NPM Version](https://img.shields.io/npm/v/@devaloop/prettier-plugin-devalang)
-![License](https://img.shields.io/github/license/devaloop/prettier-plugin-devalang)
+![License](https://img.shields.io/github/license/devaloop-labs/prettier-plugin-devalang)
 [![VSCode Extension](https://img.shields.io/visual-studio-marketplace/v/devaloop.devalang-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=devaloop.devalang-vscode)
 
 
-# ✨ [Devalang](https://github.com/devaloop/devalang) Prettier plugin
+# ✨ [Devalang](https://github.com/devaloop-labs/devalang) Prettier plugin
 
-This is a Prettier plugin for formatting [Devalang](https://github.com/devaloop/devalang) code. It provides a consistent and readable format for Devalang files, making it easier to maintain and collaborate on projects.
+This is a Prettier plugin for formatting [Devalang](https://github.com/devaloop-labs/devalang) code. It provides a consistent and readable format for Devalang files, making it easier to maintain and collaborate on projects.
 
 ## Features
 
