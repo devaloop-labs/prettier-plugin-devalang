@@ -2,23 +2,51 @@
     <img src="https://firebasestorage.googleapis.com/v0/b/devaloop-labs.firebasestorage.app/o/devalang-teal-logo.svg?alt=media&token=d2a5705a-1eba-4b49-88e6-895a761fb7f7" alt="Devalang Logo">
 </div>
 
+![TypeScript](https://img.shields.io/badge/Built%20with-TypeScript-blue?logo=typescript)
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen?logo=node.js)
+
 ![NPM Version](https://img.shields.io/npm/v/@devaloop/prettier-plugin-devalang)
 ![License](https://img.shields.io/github/license/devaloop-labs/prettier-plugin-devalang)
-[![VSCode Extension](https://img.shields.io/visual-studio-marketplace/v/devaloop.devalang-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=devaloop.devalang-vscode)
 
 ![NPM Downloads](https://img.shields.io/npm/dt/@devaloop/prettier-plugin-devalang)
 
 
-# ✨ [Devalang](https://github.com/devaloop-labs/devalang) Prettier plugin
+# 🎼 [Devalang](https://github.com/devaloop-labs/devalang) (Prettier Plugin)
 
-This is a Prettier plugin for formatting [Devalang](https://github.com/devaloop-labs/devalang) code. It provides a consistent and readable format for Devalang files, making it easier to maintain and collaborate on projects.
+🎶 Compose music with code — structured, expressive, and fast.
+
+[Devalang](https://github.com/devaloop-labs/devalang) is a tiny domain-specific language (DSL) for music makers, sound designers, and audio hackers.
+Compose loops, control samples, render and play audio — all in clean, readable text.
+
+🦊 Whether you're building a track, shaping textures, or performing live, Devalang helps you think in rhythms. It’s designed to be simple, expressive, and fast — because your ideas shouldn’t wait.
+
+From studio sketches to live sets, Devalang gives you rhythmic control — with the elegance of code.
+
+## 📚 Quick Access
+
+- [🌐 Devalang CLI](https://github.com/devaloop-labs/devalang)
+- [📖 Documentation](https://github.com/devaloop-labs/devalang/tree/main/docs)
+- [💡 Examples](https://github.com/devaloop-labs/devalang/tree/main/examples)
+- [🧩 VSCode Extension](https://marketplace.visualstudio.com/items?itemName=devaloop.devalang-vscode)
+- [🌐 Project Website](https://devalang.com)
 
 ## Features
 
-- Formatting for `.deva` files
-- Preserves blank lines and comments
-- Indentation-aware for loops and blocks
-- Easy to integrate in VS Code or CLI
+🔹 **Clean formatting for `.deva` files**  
+Say goodbye to messy indentation and inconsistent spacing. Your Devalang code is auto-magically formatted with precision 🧹
+
+🔸 **Preserves blank lines & comments**  
+Comments (`# like this`) and intentional spacing are respected — because context matters 💬
+
+🔹 **Smart indentation for blocks**  
+Handles `loop`, `group`, and conditional `if / else if / else` blocks with proper indentation, just like you'd expect 🧠
+
+🔸 **Seamless integration**  
+Works out of the box in **VS Code**, Prettier, and any compatible editor 💻⚙️
+
+---
+
+🧩 Built with love to make your Devalang experience smoother and your files prettier!
 
 ## Installation
 
@@ -59,6 +87,8 @@ Here's an example of how to format a Devalang file using the plugin:
 
 loop 10:
 .x auto y
+  .y auto x
+    .z auto y
 ```
 
 After formatting with Prettier, it will look like this:
@@ -74,6 +104,8 @@ After formatting with Prettier, it will look like this:
 
 loop 10:
   .x auto y
+  .y auto x
+  .z auto y
 ```
 
 The plugin automatically indents the code and ensures consistent formatting across your Devalang files.

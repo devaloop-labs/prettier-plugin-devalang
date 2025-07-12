@@ -15,3 +15,21 @@ call myGroup
 
 # Will be executed in parallel (concurrently)
 # spawn myGroup
+
+if loopCount > 0:
+    .kickCustom duration params
+    .hatCustom duration params
+else if loopCount == 0:
+    .kickCustom duration params
+    .hatCustom duration params
+else:
+    .kickCustom duration params
+    .hatCustom duration params
+
+group myGroup:
+    .kickCustom duration params
+    .hatCustom duration params
+
+loop 10:
+    .kickCustom duration params
+    .hatCustom duration params
