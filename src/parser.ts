@@ -5,13 +5,16 @@ export type Node =
   | LetDeclaration
   | LoopBlock
   | TriggerCall
+  | GroupBlock
+  | CallStatement
+  | SpawnStatement
+  | SleepStatement
   | Comment
   | Unknown
   | ImportStatement
   | ExportStatement
   | LoadStatement
   | BlankLine;
-
 
 export type Expression =
   | Identifier
@@ -109,6 +112,27 @@ export interface BlankLine {
   type: "BlankLine";
 }
 
+export interface GroupBlock {
+  type: "Group";
+  name: string;
+  body: Node[];
+}
+
+export interface CallStatement {
+  type: "Call";
+  identifier: string;
+}
+
+export interface SpawnStatement {
+  type: "Spawn";
+  identifier: string;
+}
+
+export interface SleepStatement {
+  type: "Sleep";
+  value: Expression;
+}
+
 const parseValue = (value: string): Expression => {
   value = value.trim();
 
@@ -153,7 +177,7 @@ export const parse = (text: string): ProgramNode => {
   const lines = text.split("\n");
   const body: Node[] = [];
 
-  const stack: { type: "Loop"; indent: number; node: LoopBlock }[] = [];
+  const stack: { type: "Loop" | "Group"; indent: number; node: LoopBlock | GroupBlock }[] = [];
 
   const pushToBodyOrBlock = (indent: number, node: Node) => {
     const current = stack.at(-1);
@@ -171,7 +195,7 @@ export const parse = (text: string): ProgramNode => {
 
     const indent = match[1].length;
     const line = match[2].trim();
-    
+
     if (line === "") {
       const blank: BlankLine = { type: "BlankLine" };
       (stack.at(-1)?.node.body ?? body).push(blank);
@@ -265,6 +289,40 @@ export const parse = (text: string): ProgramNode => {
         path,
         alias
       });
+      continue;
+    }
+
+    // group
+    const groupMatch = line.match(/^group\s+([a-zA-Z_][\w]*)\s*:/);
+    if (groupMatch) {
+      const group: GroupBlock = { type: "Group", name: groupMatch[1], body: [] };
+      body.push(group);
+      stack.push({ type: "Group", indent, node: group });
+      continue;
+    }
+
+    // call
+    const callMatch = line.match(/^call\s+([a-zA-Z_][\w]*)$/);
+    if (callMatch) {
+      const call: CallStatement = { type: "Call", identifier: callMatch[1] };
+      pushToBodyOrBlock(indent, call);
+      continue;
+    }
+
+    // spawn
+    const spawnMatch = line.match(/^spawn\s+([a-zA-Z_][\w]*)$/);
+    if (spawnMatch) {
+      const spawn: SpawnStatement = { type: "Spawn", identifier: spawnMatch[1] };
+      pushToBodyOrBlock(indent, spawn);
+      continue;
+    }
+
+    // sleep
+    const sleepMatch = line.match(/^sleep\s+(.*)$/);
+    if (sleepMatch) {
+      const expr = parseValue(sleepMatch[1]);
+      const sleep: SleepStatement = { type: "Sleep", value: expr };
+      pushToBodyOrBlock(indent, sleep);
       continue;
     }
 

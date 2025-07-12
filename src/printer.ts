@@ -44,8 +44,10 @@ export const print = (path: AstPath<Node>, options: any, print: (path: AstPath<N
         parts.push(hardline);
       }
 
-      // Add a final hardline if the last node is not a BlankLine
-      parts.push(hardline);
+      const lastNode = node.body[node.body.length - 1];
+      if (lastNode && lastNode.type !== "BlankLine") {
+        parts.push(hardline);
+      }
 
       return parts;
     }
@@ -82,7 +84,6 @@ export const print = (path: AstPath<Node>, options: any, print: (path: AstPath<N
       return [`loop ${node.identifier}:`, indent([hardline, ...parts])];
     }
 
-
     case "Trigger":
       return `${node.name} ${node.args.join(" ")}`;
 
@@ -94,6 +95,37 @@ export const print = (path: AstPath<Node>, options: any, print: (path: AstPath<N
 
     case "LoadSample":
       return `@load "${node.path}" as ${node.alias}`;
+
+    case "Group": {
+      const children = node.body;
+      const printed = path.map(print, "body");
+      const parts: Doc[] = [];
+
+      for (let i = 0; i < printed.length; i++) {
+        const current = printed[i];
+        if (current === "" || current === undefined) continue;
+
+        parts.push(current);
+
+        const next = children[i + 1];
+        if (!next) continue;
+
+        if (next.type !== "BlankLine") {
+          parts.push(hardline);
+        }
+      }
+
+      return ["group ", node.name, ":", indent([hardline, ...parts])];
+    }
+
+    case "Call":
+      return `call ${node.identifier}`;
+
+    case "Sleep":
+      return `sleep ${node.value}`;
+
+    case "Spawn":
+      return `spawn ${node.identifier}`;
 
     case "Comment":
       return node.value;

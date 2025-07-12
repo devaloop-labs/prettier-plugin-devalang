@@ -1,4 +1,4 @@
-export type Node = ProgramNode | BpmDeclaration | BankDeclaration | LetDeclaration | LoopBlock | TriggerCall | Comment | Unknown | ImportStatement | ExportStatement | LoadStatement | BlankLine;
+export type Node = ProgramNode | BpmDeclaration | BankDeclaration | LetDeclaration | LoopBlock | TriggerCall | GroupBlock | CallStatement | SpawnStatement | SleepStatement | Comment | Unknown | ImportStatement | ExportStatement | LoadStatement | BlankLine;
 export type Expression = Identifier | NumberLiteral | StringLiteral | BooleanLiteral | ObjectLiteral;
 export interface ProgramNode {
     type: "Program";
@@ -74,6 +74,23 @@ export interface Unknown {
 }
 export interface BlankLine {
     type: "BlankLine";
+}
+export interface GroupBlock {
+    type: "Group";
+    name: string;
+    body: Node[];
+}
+export interface CallStatement {
+    type: "Call";
+    identifier: string;
+}
+export interface SpawnStatement {
+    type: "Spawn";
+    identifier: string;
+}
+export interface SleepStatement {
+    type: "Sleep";
+    value: Expression;
 }
 export declare const parse: (text: string) => ProgramNode;
 export declare const astFormat = "devalang";

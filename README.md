@@ -15,7 +15,7 @@ This is a Prettier plugin for formatting [Devalang](https://github.com/devaloop-
 
 ## Features
 
-- Automatic formatting for `.deva` files
+- Formatting for `.deva` files
 - Preserves blank lines and comments
 - Indentation-aware for loops and blocks
 - Easy to integrate in VS Code or CLI

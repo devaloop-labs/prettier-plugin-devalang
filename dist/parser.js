@@ -137,6 +137,36 @@ const parse = (text) => {
             });
             continue;
         }
+        // group
+        const groupMatch = line.match(/^group\s+([a-zA-Z_][\w]*)\s*:/);
+        if (groupMatch) {
+            const group = { type: "Group", name: groupMatch[1], body: [] };
+            body.push(group);
+            stack.push({ type: "Group", indent, node: group });
+            continue;
+        }
+        // call
+        const callMatch = line.match(/^call\s+([a-zA-Z_][\w]*)$/);
+        if (callMatch) {
+            const call = { type: "Call", identifier: callMatch[1] };
+            pushToBodyOrBlock(indent, call);
+            continue;
+        }
+        // spawn
+        const spawnMatch = line.match(/^spawn\s+([a-zA-Z_][\w]*)$/);
+        if (spawnMatch) {
+            const spawn = { type: "Spawn", identifier: spawnMatch[1] };
+            pushToBodyOrBlock(indent, spawn);
+            continue;
+        }
+        // sleep
+        const sleepMatch = line.match(/^sleep\s+(.*)$/);
+        if (sleepMatch) {
+            const expr = parseValue(sleepMatch[1]);
+            const sleep = { type: "Sleep", value: expr };
+            pushToBodyOrBlock(indent, sleep);
+            continue;
+        }
         // Unknown
         pushToBodyOrBlock(indent, { type: "Unknown", value: line });
     }
