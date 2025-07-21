@@ -3,7 +3,9 @@ import {
     NumberLiteral,
     StringLiteral,
     BooleanLiteral,
-    ObjectLiteral
+    ObjectLiteral,
+    SynthReference,
+    ObjectProperty,
 } from "../interfaces/statement";
 
 export type Expression =
@@ -11,4 +13,6 @@ export type Expression =
     | NumberLiteral
     | StringLiteral
     | BooleanLiteral
-    | ObjectLiteral;
+    | ObjectLiteral
+    | SynthReference
+    | ObjectProperty;

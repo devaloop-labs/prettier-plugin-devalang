@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://firebasestorage.googleapis.com/v0/b/devaloop-labs.firebasestorage.app/o/devalang-teal-logo.svg?alt=media&token=d2a5705a-1eba-4b49-88e6-895a761fb7f7" alt="Devalang Logo">
+  <img src="https://devalang.com/images/devalang-logo-cyan.svg" alt="Devalang Logo" width="300" />
 </div>
 
 ![TypeScript](https://img.shields.io/badge/Built%20with-TypeScript-blue?logo=typescript)
@@ -11,7 +11,7 @@
 ![NPM Downloads](https://img.shields.io/npm/dt/@devaloop/prettier-plugin-devalang)
 
 
-# 🎼 [Devalang](https://github.com/devaloop-labs/devalang) (Prettier Plugin)
+# 🎶 [Devalang](https://github.com/devaloop-labs/devalang) (Prettier Plugin)
 
 🎶 Compose music with code — structured, expressive, and fast.
 
@@ -24,11 +24,14 @@ From studio sketches to live sets, Devalang gives you rhythmic control — with 
 
 ## 📚 Quick Access
 
-- [🌐 Devalang CLI](https://github.com/devaloop-labs/devalang)
-- [📖 Documentation](https://github.com/devaloop-labs/devalang/tree/main/docs)
-- [💡 Examples](https://github.com/devaloop-labs/devalang/tree/main/examples)
+- [▶️ Playground](https://playground.devalang.com)
+- [📖 Documentation](https://docs.devalang.com)
+- [🌐 Devalang CLI Github](https://github.com/devaloop-labs/devalang)
 - [🧩 VSCode Extension](https://marketplace.visualstudio.com/items?itemName=devaloop.devalang-vscode)
+- [📜 Changelog](https://github.com/devaloop-labs/devalang/blob/main/docs/CHANGELOG.md)
+- [💡 Examples](https://github.com/devaloop-labs/devalang/tree/main/examples)
 - [🌐 Project Website](https://devalang.com)
+- [📦 Devalang CLI on npm](https://www.npmjs.com/package/@devaloop/devalang)
 
 ## Features
 
@@ -77,35 +80,33 @@ npx prettier --plugin=@devaloop/prettier-plugin-devalang --write your-file.deva
 Here's an example of how to format a Devalang file using the plugin:
 
 ```deva
-@import { x, y } from "./my-module.deva"
+@import { trigger, params } from "./my-module.deva"
 
 # This is a comment
 
-.x auto y
-
-# Another comment
+.trigger 1/4 {
+  drive:50
+}
 
 loop 10:
-.x auto y
-  .y auto x
-    .z auto y
+.trigger 1/8 params
+    .trigger 1500 { drive: 50 }
+        .trigger auto args
 ```
 
 After formatting with Prettier, it will look like this:
 
 ```deva
-@import { x, y } from "./my-module.deva"
+@import { trigger, params } from "./my-module.deva"
 
 # This is a comment
 
-.x auto y
-
-# Another comment
+.trigger 1/4 { drive: 50 }
 
 loop 10:
-  .x auto y
-  .y auto x
-  .z auto y
+  .trigger 1/8 params
+  .trigger 1500 { drive: 50 }
+  .trigger auto args
 ```
 
 The plugin automatically indents the code and ensures consistent formatting across your Devalang files.

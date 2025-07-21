@@ -15,7 +15,8 @@ import {
   ExportStatement,
   IfStatement,
   LoadStatement,
-  BlankLine
+  BlankLine,
+  ArrowCallStatement,
 } from "../interfaces/statement";
 
 export type Node =
@@ -35,4 +36,6 @@ export type Node =
   | ExportStatement
   | IfStatement
   | LoadStatement
-  | BlankLine;
+  | BlankLine
+  | LoadStatement
+  | ArrowCallStatement;

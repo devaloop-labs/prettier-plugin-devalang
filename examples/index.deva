@@ -1,35 +1,30 @@
 # This file demonstrates the use of main features in Devalang.
 
-@import { duration, default_bank, params, loopCount, tempo } from "./examples/variables.deva"
-@import { myGroup } from "./examples/group.deva"
+bank 808
 
-@load "./examples/samples/kick-808.wav" as kickCustom
-@load "./examples/samples/hat-808.wav" as hatCustom
+.808.kick 1/4 {
+    drive:50
+}
 
-bpm tempo
-
-bank default_bank
-
-# Will be executed line by line (sequentially)
-call myGroup
-
-# Will be executed in parallel (concurrently)
-# spawn myGroup
-
-if loopCount > 0:
-    .kickCustom duration params
-    .hatCustom duration params
-else if loopCount == 0:
-    .kickCustom duration params
-    .hatCustom duration params
-else:
-    .kickCustom duration params
-    .hatCustom duration params
-
-group myGroup:
-    .kickCustom duration params
-    .hatCustom duration params
+.808.snare 1000 {
+    drive:50, 
+    reverb: 50
+}
 
 loop 10:
-    .kickCustom duration params
-    .hatCustom duration params
+.x auto args
+    .y auto { drive: 50 }
+.z auto args
+
+if loopCount > 5:
+    .808.kick 1/4 {
+        drive: 100
+    }
+else if loopCount == 5:
+    .808.snare 1/4 {
+        drive: 100
+    }
+else:
+    .808.kick 1/4 {
+        drive: 50
+    }

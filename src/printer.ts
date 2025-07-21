@@ -1,38 +1,10 @@
 import { type AstPath, type Doc, doc } from "prettier";
 import { Expression } from "./types/expression";
 import { Node } from "./types/node";
+import { ArrowCallStatement } from "./interfaces/statement";
+import { parseBlock } from "./parser";
 
-const { hardline, indent, group } = doc.builders;
-
-/**
- * Parses a block of nodes
- * @param block Node[]
- * @returns Doc[]
- */
-const parseBlock = (block: Node[]): Doc[] => {
-  const parts: Doc[] = [];
-  let i = 0;
-
-  for (const node of block) {
-    const printed = print({ getValue: () => node } as AstPath<Node>, {}, () => "");
-
-    if (printed !== "" && printed !== undefined) {
-      parts.push(printed);
-
-      if (i !== block.length - 1) {
-        parts.push(hardline);
-      }
-    }
-
-    i++;
-  }
-
-  if (parts[parts.length - 1] === hardline) {
-    parts.pop(); // deletes trailing hardline
-  }
-
-  return parts;
-}
+const { hardline, indent, join, group } = doc.builders;
 
 /**
  * Prints an expression by its type.
@@ -50,9 +22,17 @@ const printExpression = (expr: Expression): string => {
     case "BooleanLiteral":
       return expr.value ? "true" : "false";
     case "ObjectLiteral":
+      if (!expr.properties || expr.properties.length === 0) {
+        return "";
+      }
       return `{ ${expr.properties
-        .map((p: any) => `${p.key}: ${printExpression(p.value)}`)
+        .map((p: any) => `${p.key ? p.key + ':' : ''} ${printExpression(p.value)}`)
         .join(", ")} }`;
+
+    case "ObjectProperty":
+      return `${expr.key}: ${printExpression(expr.value)}`;
+    case "SynthReference":
+      return `synth ${expr.name}`;
 
     default:
       throw new Error(`Unsupported expression type: ${(expr as any).type}`);
@@ -74,11 +54,11 @@ export const print = (
   const node = path.node ? path.node : path.getValue();
 
   // NOTE: See the parsed AST in the console for debugging purposes.
-  // if (node.type === "Program") {
-  //   console.log("\nPrettier AST :");
-  //   console.dir(node, { depth: null, colors: true });
-  //   console.log();
-  // }
+  if (node.type === "Program") {
+    console.log("\nPrettier AST :");
+    console.dir(node, { depth: null, colors: true });
+    console.log();
+  }
 
   switch (node.type) {
     case "Program": {
@@ -99,7 +79,6 @@ export const print = (
         parts.push(hardline);
       }
 
-      // Deletes trailing hardline if the last part is a hardline
       while (parts.length > 0 && parts[parts.length - 1] === hardline) {
         parts.pop();
       }
@@ -117,14 +96,16 @@ export const print = (
       return `let ${node.name} = ${printExpression(node.value)}`;
 
     case "Loop": {
-      const rawBody = node.body;
-      const parts: Doc[] = parseBlock(rawBody);
+      const parts: Doc[] = parseBlock(node.body);
 
-      return [`loop ${node.identifier}:`, indent([hardline, ...parts])];
+      return group([
+        `loop ${node.iterator.value}:`,
+        indent([hardline, ...parts])
+      ]);
     }
 
     case "Trigger":
-      return `${node.name} ${node.args.join(" ")}`;
+      return `${node.name} ${node.args.length && node.duration ? node.duration.value + " " : node.duration ? node.duration.value : ""}${printArguments(node.args)}`;
 
     case "ImportStatement":
       return `@import { ${node.identifiers.join(", ")} } from "${node.from}"`;
@@ -156,23 +137,18 @@ export const print = (
 
       // if
       parts.push(`if ${node.condition}:`);
-      const ifBody = parseBlock(node.body);
-      parts.push(indent([hardline, ...ifBody]));
+      parts.push(indent([hardline, ...parseBlock(node.body)]));
 
-      // else if
-      if (node.elseIfs && node.elseIfs.length > 0) {
-        for (const elseIf of node.elseIfs) {
-          parts.push(hardline, `else if ${elseIf.condition}:`);
-          const elseIfBody = parseBlock(elseIf.body);
-          parts.push(indent([hardline, ...elseIfBody]));
-        }
+      // else ifs
+      for (const elseIf of node.elseIfs ?? []) {
+        parts.push(hardline, `else if ${elseIf.condition}:`);
+        parts.push(indent([hardline, ...parseBlock(elseIf.body)]));
       }
 
       // else
       if (node.alternate && node.alternate.length > 0) {
         parts.push(hardline, "else:");
-        const elseBody = parseBlock(node.alternate);
-        parts.push(indent([hardline, ...elseBody]));
+        parts.push(indent([hardline, ...parseBlock(node.alternate)]));
       }
 
       return group(parts);
@@ -187,10 +163,55 @@ export const print = (
     case "BlankLine":
       return hardline;
 
+    case "ArrowCall":
+      return printArrowCall(node);
+
     default:
       throw new Error(`Unsupported node type: ${(node as any).type}`);
   }
 };
+
+const printArrowCall = (call: ArrowCallStatement): Doc => {
+  const target = call.target;
+  const func = call.method;
+
+  const args: Expression[] = call.args
+    .filter((arg) => !(arg.type === "ObjectLiteral" && arg.properties.length === 0));
+
+  if (args.length === 0) {
+    return `${target} -> ${func}()`;
+  }
+
+  return group([
+    `${target} -> ${func}(`,
+    join(", ", args.map(printExpression)),
+    ")"
+  ]);
+};
+
+const printArguments = (args: Expression[]): string => {
+  if (args.length === 0) return "";
+
+  const isAllObjectProps = args.every(arg => arg.type === "ObjectProperty");
+
+  if (isAllObjectProps) {
+    const props = args as any[];
+
+    const printedProps = props
+      .map((p) => `${p.key}: ${printExpression(p.value)}`)
+      .join(", ");
+
+    return printedProps ? `{ ${printedProps} }` : "";
+  }
+
+  if (args.length === 1 && args[0].type === "Identifier") {
+    return args[0].name;
+  }
+
+  return args.map(printExpression).join(", ");
+};
+
+
 
 export const embed = undefined;
 export const insertPragma = undefined;

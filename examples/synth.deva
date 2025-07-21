@@ -1,0 +1,6 @@
+group myLead:
+    let synth = synth sine
+
+    synth -> note(C4, { duration: 500 })
+
+call myLead
