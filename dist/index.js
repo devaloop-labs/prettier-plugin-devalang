@@ -39,20 +39,20 @@ const plugin = {
         {
             name: "devalang",
             parsers: ["devalang"],
-            extensions: [".deva"]
-        }
+            extensions: [".deva"],
+        },
     ],
     parsers: {
         devalang: {
             parse: parser.parse,
-            astFormat: "devalang"
-        }
+            astFormat: "devalang",
+        },
     },
     printers: {
         devalang: {
-            print: printer.print
-        }
+            print: printer.print,
+        },
     },
-    astFormat: "devalang"
+    astFormat: "devalang",
 };
 module.exports = plugin;

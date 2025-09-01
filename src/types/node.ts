@@ -17,6 +17,11 @@ import {
   LoadStatement,
   BlankLine,
   ArrowCallStatement,
+  UsePluginStatement,
+  OnBlock,
+  EmitStatement,
+  PrintStatement,
+  FnBlock,
 } from "../interfaces/statement";
 
 export type Node =
@@ -37,5 +42,9 @@ export type Node =
   | IfStatement
   | LoadStatement
   | BlankLine
-  | LoadStatement
-  | ArrowCallStatement;
+  | ArrowCallStatement
+  | UsePluginStatement
+  | OnBlock
+  | EmitStatement
+  | PrintStatement
+  | FnBlock;

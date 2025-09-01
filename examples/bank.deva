@@ -1,0 +1,7 @@
+# This file demonstrates the use of banks in Devalang.
+
+bank devaloop.808 as myBank
+
+.myBank.kick auto
+.myBank.snare auto
+.myBank.openhat auto

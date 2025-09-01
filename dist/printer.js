@@ -17,14 +17,16 @@ const printExpression = (expr) => {
             return expr.value.toString();
         case "StringLiteral":
             return `"${expr.value}"`;
+        case "RawLiteral":
+            return expr.value;
         case "BooleanLiteral":
             return expr.value ? "true" : "false";
         case "ObjectLiteral":
             if (!expr.properties || expr.properties.length === 0) {
-                return "";
+                return "{}";
             }
             return `{ ${expr.properties
-                .map((p) => `${p.key ? p.key + ':' : ''} ${printExpression(p.value)}`)
+                .map((p) => `${p.key ? p.key + ":" : ""} ${printExpression(p.value)}`)
                 .join(", ")} }`;
         case "ObjectProperty":
             return `${expr.key}: ${printExpression(expr.value)}`;
@@ -43,88 +45,164 @@ const printExpression = (expr) => {
  */
 const print = (path, options, print) => {
     const node = path.node ? path.node : path.getValue();
-    // NOTE: See the parsed AST in the console for debugging purposes.
-    if (node.type === "Program") {
-        console.log("\nPrettier AST :");
-        console.dir(node, { depth: null, colors: true });
-        console.log();
-    }
+    const nodeIndent = node._indent || 0;
+    const indentSpaces = node && node.type !== "BlankLine" ? " ".repeat(nodeIndent) : "";
+    // Debug logging disabled in production
     switch (node.type) {
         case "Program": {
-            const printedNodes = path.map(print, "body");
-            const parts = [];
-            for (let i = 0; i < node.body.length; i++) {
-                const printed = printedNodes[i];
-                if (printed === "" || printed === undefined)
-                    continue;
-                parts.push(printed);
-                const nextNode = node.body[i + 1];
-                if (!nextNode || nextNode.type === "BlankLine")
-                    continue;
-                parts.push(hardline);
+            // preserve original source lines, replacing a line with a formatted
+            // single-line version when the formatted representation fits the printWidth
+            const parserModule = require("./parser");
+            const sourceLines = parserModule.SOURCE_LINES || [];
+            const maxWidth = (options && options.printWidth) || 80;
+            // collect all nodes recursively
+            const allNodes = [];
+            const collect = (n) => {
+                if (!n || typeof n !== "object")
+                    return;
+                if (n.type)
+                    allNodes.push(n);
+                for (const k of Object.keys(n)) {
+                    const v = n[k];
+                    if (Array.isArray(v)) {
+                        for (const it of v)
+                            collect(it);
+                    }
+                    else if (v && typeof v === "object") {
+                        collect(v);
+                    }
+                }
+            };
+            collect(node);
+            const lineMap = {};
+            for (const n of allNodes) {
+                const ln = n._line;
+                if (typeof ln === "number" && lineMap[ln] === undefined) {
+                    lineMap[ln] = n;
+                }
             }
-            while (parts.length > 0 && parts[parts.length - 1] === hardline) {
-                parts.pop();
+            // start from original source lines to preserve whitespace and blank lines
+            const outLines = sourceLines.slice();
+            for (let i = 0; i < outLines.length; i++) {
+                const nodeAt = lineMap[i];
+                if (!nodeAt)
+                    continue;
+                // get formatted representation for that node
+                const printerModule = require("./printer");
+                const printed = printerModule.print({ getValue: () => nodeAt }, options, printerModule.print);
+                if (printed === undefined)
+                    continue;
+                const str = Array.isArray(printed) ? printed.join("") : String(printed);
+                // only replace if single-line and fits the width
+                if (!str.includes("\n")) {
+                    const leading = nodeAt._leading || "";
+                    // remove any leading spaces from the printed output to avoid double-indenting
+                    const printedTrimmed = str.replace(/^\s+/, "");
+                    const totalLen = leading.length + printedTrimmed.length;
+                    if (totalLen <= maxWidth) {
+                        outLines[i] = leading + printedTrimmed;
+                    }
+                }
             }
-            return parts;
+            const srcText = parserModule.SOURCE_TEXT || "";
+            const hasTrailingNewline = srcText.endsWith("\n") || srcText.endsWith("\r\n");
+            const joined = outLines.join("\n");
+            // if joined already ends with an empty line because outLines ended with '',
+            // do not append another newline. Otherwise append if source had trailing newline.
+            if (hasTrailingNewline) {
+                return joined.endsWith("\n") || joined.endsWith("\r\n")
+                    ? joined
+                    : joined + "\n";
+            }
+            return joined;
         }
         case "BpmDeclaration":
-            return `bpm ${node.identifier}`;
+            return indentSpaces + `bpm ${node.identifier}`;
         case "BankDeclaration":
-            return `bank ${node.identifier}`;
+            return (indentSpaces +
+                `bank ${node.identifier}${node.alias ? ` as ${node.alias}` : ""}`);
         case "LetDeclaration":
-            return `let ${node.name} = ${printExpression(node.value)}`;
+            return indentSpaces + `let ${node.name} = ${printExpression(node.value)}`;
         case "Loop": {
-            const parts = (0, parser_1.parseBlock)(node.body);
-            return group([
-                `loop ${node.iterator.value}:`,
-                indent([hardline, ...parts])
-            ]);
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `loop ${node.iterator.value}:\n${blockStr}`
+                : indentSpaces + `loop ${node.iterator.value}:`;
         }
-        case "Trigger":
-            return `${node.name} ${node.args.length && node.duration ? node.duration.value + " " : node.duration ? node.duration.value : ""}${printArguments(node.args)}`;
+        case "Trigger": {
+            const partsArr = [node.name];
+            if (node.duration)
+                partsArr.push(`${node.duration.value}`);
+            if (node.args && node.args.length > 0)
+                partsArr.push(printArguments(node.args));
+            return indentSpaces + partsArr.join(" ");
+        }
         case "ImportStatement":
-            return `@import { ${node.identifiers.join(", ")} } from "${node.from}"`;
+            return (indentSpaces +
+                `@import { ${node.identifiers.join(", ")} } from "${node.from}"`);
         case "ExportStatement":
-            return `@export { ${node.identifiers.join(", ")} }`;
+            return indentSpaces + `@export { ${node.identifiers.join(", ")} }`;
         case "LoadSample":
-            return `@load "${node.path}" as ${node.alias}`;
+            return indentSpaces + `@load "${node.path}" as ${node.alias}`;
         case "Group": {
-            const rawChildren = node.body;
-            const parts = (0, parser_1.parseBlock)(rawChildren);
-            return ["group ", node.name, ":", indent([hardline, ...parts])];
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `group ${node.name}:\n${blockStr}`
+                : indentSpaces + `group ${node.name}:`;
         }
         case "Call":
-            return `call ${node.identifier}`;
+            return indentSpaces + `call ${node.identifier}`;
         case "Sleep":
-            return `sleep ${node.value}`;
+            return indentSpaces + `sleep ${printExpression(node.value)}`;
         case "Spawn":
-            return `spawn ${node.identifier}`;
+            return indentSpaces + `spawn ${node.identifier}`;
+        case "UsePlugin":
+            return (indentSpaces +
+                `@use ${node.name}${node.alias ? ` as ${node.alias}` : ""}`);
+        case "On": {
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `on ${node.event}:\n${blockStr}`
+                : indentSpaces + `on ${node.event}:`;
+        }
+        case "Emit":
+            return (indentSpaces +
+                `emit ${node.name}${node.payload ? ` ${node.payload}` : ""}`);
+        case "Print":
+            return indentSpaces + `print ${node.expression}`;
+        case "Fn": {
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `fn ${node.name}(${node.params}):\n${blockStr}`
+                : indentSpaces + `fn ${node.name}(${node.params}):`;
+        }
         case "If": {
-            const parts = [];
-            // if
-            parts.push(`if ${node.condition}:`);
-            parts.push(indent([hardline, ...(0, parser_1.parseBlock)(node.body)]));
-            // else ifs
+            let out = indentSpaces + `if ${node.condition}:`;
+            const bodyStr = (0, parser_1.parseBlock)(node.body);
+            if (bodyStr)
+                out += `\n${bodyStr}`;
             for (const elseIf of node.elseIfs ?? []) {
-                parts.push(hardline, `else if ${elseIf.condition}:`);
-                parts.push(indent([hardline, ...(0, parser_1.parseBlock)(elseIf.body)]));
+                const elseIfStr = (0, parser_1.parseBlock)(elseIf.body);
+                out += `\n${indentSpaces}else if ${elseIf.condition}:`;
+                if (elseIfStr)
+                    out += `\n${elseIfStr}`;
             }
-            // else
             if (node.alternate && node.alternate.length > 0) {
-                parts.push(hardline, "else:");
-                parts.push(indent([hardline, ...(0, parser_1.parseBlock)(node.alternate)]));
+                const altStr = (0, parser_1.parseBlock)(node.alternate);
+                out += `\n${indentSpaces}else:`;
+                if (altStr)
+                    out += `\n${altStr}`;
             }
-            return group(parts);
+            return out;
         }
         case "Comment":
-            return node.value;
+            return indentSpaces + node.value;
         case "Unknown":
-            return node.value;
+            return indentSpaces + node.value;
         case "BlankLine":
-            return hardline;
+            return "";
         case "ArrowCall":
-            return printArrowCall(node);
+            return indentSpaces + printArrowCall(node);
         default:
             throw new Error(`Unsupported node type: ${node.type}`);
     }
@@ -133,21 +211,13 @@ exports.print = print;
 const printArrowCall = (call) => {
     const target = call.target;
     const func = call.method;
-    const args = call.args
-        .filter((arg) => !(arg.type === "ObjectLiteral" && arg.properties.length === 0));
-    if (args.length === 0) {
-        return `${target} -> ${func}()`;
-    }
-    return group([
-        `${target} -> ${func}(`,
-        join(", ", args.map(printExpression)),
-        ")"
-    ]);
+    const args = (call.argsRaw || []).map((s) => s.trim()).filter(Boolean);
+    return `${target} -> ${func}(${args.join(", ")})`;
 };
 const printArguments = (args) => {
     if (args.length === 0)
         return "";
-    const isAllObjectProps = args.every(arg => arg.type === "ObjectProperty");
+    const isAllObjectProps = args.every((arg) => arg.type === "ObjectProperty");
     if (isAllObjectProps) {
         const props = args;
         const printedProps = props

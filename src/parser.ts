@@ -11,7 +11,13 @@ import {
   CallStatement,
   SpawnStatement,
   IfStatement,
-  ObjectProperty
+  ObjectProperty,
+  UsePluginStatement,
+  OnBlock,
+  EmitStatement,
+  PrintStatement,
+  FnBlock,
+  ArrowCallStatement,
 } from "./interfaces/statement";
 import { print } from "./printer";
 import { DurationValue } from "./types/duration";
@@ -19,6 +25,10 @@ import { Expression } from "./types/expression";
 import { Node } from "./types/node";
 
 const { hardline } = doc.builders;
+
+// exported placeholders filled by parse()
+export let SOURCE_TEXT = "";
+export let SOURCE_LINES: string[] = [];
 
 /**
  * Parses a value string into an Expression.
@@ -91,30 +101,27 @@ const parseValue = (value: string): Expression => {
  * @param block Node[]
  * @returns Doc[]
  */
-export const parseBlock = (block: Node[]): Doc[] => {
-  const parts: Doc[] = [];
-  let i = 0;
+export const parseBlock = (block: Node[]): string => {
+  const parts: string[] = [];
 
   for (const node of block) {
-    const printed = print({ getValue: () => node } as AstPath<Node>, {}, () => "");
+    const printed = print(
+      { getValue: () => node } as AstPath<Node>,
+      {},
+      () => "",
+    );
 
-    if (printed !== "" && printed !== undefined) {
-      parts.push(printed);
+    if (printed === undefined || printed === "") continue;
 
-      if (i !== block.length - 1) {
-        parts.push(hardline);
-      }
-    }
+    // printed may be a string or an array; coerce to string
+    const str = Array.isArray(printed) ? printed.join("") : String(printed);
 
-    i++;
+    parts.push(str);
   }
 
-  if (parts[parts.length - 1] === hardline) {
-    parts.pop(); // deletes trailing hardline
-  }
-
-  return parts;
-}
+  // join with newline so parent will handle block separation
+  return parts.join("\n");
+};
 
 /**
  * Parses a Devalang program from a string into an AST.
@@ -122,17 +129,29 @@ export const parseBlock = (block: Node[]): Doc[] => {
  * @returns ProgramNode
  */
 export const parse = (text: string): ProgramNode => {
+  // expose original source for the printer to reconstruct exact line breaks/whitespace
+  exports.SOURCE_TEXT = text;
+  exports.SOURCE_LINES = text.split(/\r?\n/);
   const lines = text.split("\n");
   const body: Node[] = [];
   const stack: (BlockContext & { bodyIndent: number | null })[] = [];
 
   let lastNonBlankLineIndex: number | null = null;
 
-  function pushToBodyOrBlock(indent: number, node: Node) {
+  function pushToBodyOrBlock(
+    indent: number,
+    node: Node,
+    lineContent: string,
+    lineIndex: number,
+  ) {
+    // attach original indentation and line/leading info to the node for the printer to reuse
+    (node as any)._indent = indent;
+    (node as any)._leading = (lineContent || "").slice(0, indent);
+    (node as any)._line = lineIndex;
     for (let j = stack.length - 1; j >= 0; j--) {
       const parent = stack[j];
 
-      if ('body' in parent.node) {
+      if ("body" in parent.node) {
         if (parent.bodyIndent === null && node.type !== "BlankLine") {
           parent.bodyIndent = indent;
         }
@@ -154,40 +173,196 @@ export const parse = (text: string): ProgramNode => {
 
     if (trimmedLine === "") {
       const blank: BlankLine = { type: "BlankLine" };
-      pushToBodyOrBlock(indent, blank);
+      pushToBodyOrBlock(indent, blank, lines[i], i);
+
+      // If we are inside a "flat" block (bodyIndent === parent.indent), a blank line ends that flat block
+      while (
+        stack.length > 0 &&
+        stack[stack.length - 1].bodyIndent !== null &&
+        stack[stack.length - 1].bodyIndent === stack[stack.length - 1].indent
+      ) {
+        stack.pop();
+      }
 
       continue;
     }
 
     lastNonBlankLineIndex = i;
 
+    // Pre-close blocks for same-indent header lines (avoid nesting control blocks under flat bodies)
+    const headerStarts = [
+      "if ",
+      "else if ",
+      "else",
+      "group ",
+      "loop ",
+      "on ",
+      "fn ",
+    ];
+    const isHeaderLike = headerStarts.some((h) => trimmedLine.startsWith(h));
+    if (isHeaderLike) {
+      while (
+        stack.length > 0 &&
+        stack[stack.length - 1].bodyIndent !== null &&
+        stack[stack.length - 1].bodyIndent === stack[stack.length - 1].indent &&
+        indent === stack[stack.length - 1].indent
+      ) {
+        stack.pop();
+      }
+    }
 
     if (trimmedLine.startsWith("#")) {
-      pushToBodyOrBlock(indent, { type: "Comment", value: trimmedLine });
-      i++;
+      pushToBodyOrBlock(
+        indent,
+        { type: "Comment", value: trimmedLine },
+        lines[i],
+        i,
+      );
       continue;
     }
 
     if (trimmedLine.startsWith("bpm ")) {
-      const decl: BpmDeclaration = { type: "BpmDeclaration", identifier: trimmedLine.split(" ")[1] };
-      pushToBodyOrBlock(indent, decl);
-      i++;
+      const decl: BpmDeclaration = {
+        type: "BpmDeclaration",
+        identifier: trimmedLine.split(" ")[1],
+      };
+      pushToBodyOrBlock(indent, decl, lines[i], i);
       continue;
     }
 
     if (trimmedLine.startsWith("bank ")) {
-      const decl: BankDeclaration = { type: "BankDeclaration", identifier: trimmedLine.split(" ")[1] };
-      pushToBodyOrBlock(indent, decl);
-      i++;
-      continue;
+      const bankMatch = trimmedLine.match(
+        /^bank\s+([^\s]+)(?:\s+as\s+([a-zA-Z_][\w]*))?\s*$/,
+      );
+      if (bankMatch) {
+        const [, identifier, alias] = bankMatch;
+        const decl: BankDeclaration = {
+          type: "BankDeclaration",
+          identifier,
+          ...(alias ? { alias } : {}),
+        };
+        pushToBodyOrBlock(indent, decl, lines[i], i);
+        continue;
+      }
+    }
+
+    if (trimmedLine.startsWith("@use ")) {
+      const useMatch = trimmedLine.match(
+        /^@use\s+([^\s]+)(?:\s+as\s+([a-zA-Z_][\w]*))?\s*$/,
+      );
+      if (useMatch) {
+        const [, name, alias] = useMatch;
+        const useStmt: UsePluginStatement = {
+          type: "UsePlugin",
+          name,
+          ...(alias ? { alias } : {}),
+        };
+        pushToBodyOrBlock(indent, useStmt, lines[i], i);
+        continue;
+      }
     }
 
     if (trimmedLine.startsWith("let ")) {
-      const [, name, , ...rest] = trimmedLine.split(" ");
-      const rawValue = rest.join(" ");
-      const value = parseValue(rawValue);
-      pushToBodyOrBlock(indent, { type: "LetDeclaration", name, value });
-      i++;
+      const letMatch = trimmedLine.match(/^let\s+([a-zA-Z_][\w]*)\s*=\s*(.*)$/);
+      if (!letMatch) {
+        continue;
+      }
+      const [, name, afterEq] = letMatch;
+      let rawValue = afterEq;
+      // Support multi-line value blocks (e.g., synth sine { ... }) preserving raw
+      let braceDepth = 0;
+      for (const ch of rawValue) {
+        if (ch === "{") braceDepth++;
+        if (ch === "}") braceDepth--;
+      }
+      if (braceDepth > 0) {
+        let j = i + 1;
+        while (braceDepth > 0 && j < lines.length) {
+          const nextLineRaw = lines[j];
+          for (const c of nextLineRaw) {
+            if (c === "{") braceDepth++;
+            if (c === "}") braceDepth--;
+          }
+          rawValue += "\n" + nextLineRaw;
+          j++;
+        }
+        i = j - 1;
+        pushToBodyOrBlock(
+          indent,
+          {
+            type: "LetDeclaration",
+            name,
+            value: { type: "RawLiteral", value: rawValue } as any,
+          },
+          lines[i],
+          i,
+        );
+        continue;
+      } else {
+        const value = parseValue(rawValue);
+        pushToBodyOrBlock(
+          indent,
+          { type: "LetDeclaration", name, value },
+          lines[i],
+          i,
+        );
+        continue;
+      }
+    }
+
+    // on <event>:
+    const onMatch = trimmedLine.match(/^on\s+(.+):$/);
+    if (onMatch) {
+      const onNode: OnBlock = {
+        type: "On",
+        event: onMatch[1].trim(),
+        body: [],
+      };
+      pushToBodyOrBlock(indent, onNode, lines[i], i);
+      stack.push({ type: "On", indent, node: onNode, bodyIndent: null });
+      continue;
+    }
+
+    // fn name(params):
+    const fnMatch = trimmedLine.match(
+      /^fn\s+([a-zA-Z_][\w]*)\s*\((.*)\)\s*:\s*$/,
+    );
+    if (fnMatch) {
+      const [, fname, params] = fnMatch;
+      const fnNode: FnBlock = {
+        type: "Fn",
+        name: fname,
+        params: params.trim(),
+        body: [],
+      };
+      pushToBodyOrBlock(indent, fnNode, lines[i], i);
+      stack.push({ type: "Fn", indent, node: fnNode, bodyIndent: null });
+      continue;
+    }
+
+    // emit <name> [payload]
+    const emitMatch = trimmedLine.match(
+      /^emit\s+([a-zA-Z_$][\w$]*)(?:\s+(.*))?$/,
+    );
+    if (emitMatch) {
+      const [, ename, payloadRaw] = emitMatch;
+      const emitStmt: EmitStatement = {
+        type: "Emit",
+        name: ename,
+        ...(payloadRaw ? { payload: payloadRaw } : {}),
+      };
+      pushToBodyOrBlock(indent, emitStmt, lines[i], i);
+      continue;
+    }
+
+    // print <expression...>
+    const printMatch = trimmedLine.match(/^print\s+(.+)$/);
+    if (printMatch) {
+      const printStmt: PrintStatement = {
+        type: "Print",
+        expression: printMatch[1],
+      };
+      pushToBodyOrBlock(indent, printStmt, lines[i], i);
       continue;
     }
 
@@ -202,13 +377,12 @@ export const parse = (text: string): ProgramNode => {
         elseIfs: [],
       };
 
-      pushToBodyOrBlock(indent, ifNode);
+      pushToBodyOrBlock(indent, ifNode, lines[i], i);
       stack.push({ type: "If", indent, node: ifNode, bodyIndent: null });
       continue;
     }
 
     const elseIfMatch = trimmedLine.match(/^else if\s+(.+):$/);
-    if (elseIfMatch) console.log("Matched ELSE IF!", elseIfMatch);
 
     if (elseIfMatch) {
       const parentIf = stack
@@ -218,11 +392,19 @@ export const parse = (text: string): ProgramNode => {
 
       if (parentIf) {
         const block: Node[] = [];
-        parentIf.elseIfs.push({ condition: elseIfMatch[1].trim(), body: block });
+        parentIf.elseIfs.push({
+          condition: elseIfMatch[1].trim(),
+          body: block,
+        });
 
-        pushToBodyOrBlock(indent, { type: "BlankLine" });
+        pushToBodyOrBlock(indent, { type: "BlankLine" }, lines[i], i);
 
-        stack.push({ type: "ElseIf", indent, node: { body: block }, bodyIndent: null });
+        stack.push({
+          type: "ElseIf",
+          indent,
+          node: { body: block },
+          bodyIndent: null,
+        });
         continue;
       }
     }
@@ -237,13 +419,13 @@ export const parse = (text: string): ProgramNode => {
       if (parentIf) {
         parentIf.alternate = [];
 
-        pushToBodyOrBlock(indent, { type: "BlankLine" });
+        pushToBodyOrBlock(indent, { type: "BlankLine" }, lines[i], i);
 
         stack.push({
           type: "Else",
           indent,
           node: { body: parentIf.alternate },
-          bodyIndent: null
+          bodyIndent: null,
         });
 
         continue;
@@ -257,17 +439,19 @@ export const parse = (text: string): ProgramNode => {
       const loop: LoopBlock = {
         type: "Loop",
         iterator: {
-          type: rawIterator.type === "Identifier" ? "Identifier" : "NumberLiteral",
-          value: rawIterator.type === "NumberLiteral"
-            ? rawIterator.value
-            : rawIterator.type === "Identifier"
-              ? rawIterator.name
-              : 0
+          type:
+            rawIterator.type === "Identifier" ? "Identifier" : "NumberLiteral",
+          value:
+            rawIterator.type === "NumberLiteral"
+              ? rawIterator.value
+              : rawIterator.type === "Identifier"
+                ? rawIterator.name
+                : 0,
         },
-        body: []
+        body: [],
       };
 
-      pushToBodyOrBlock(indent, loop);
+      pushToBodyOrBlock(indent, loop, lines[i], i);
       stack.push({ type: "Loop", indent, node: loop, bodyIndent: null });
       continue;
     }
@@ -312,7 +496,8 @@ export const parse = (text: string): ProgramNode => {
                 if (val.type === "NumberLiteral") {
                   duration = { type: "Milliseconds", value: val.value };
                 } else if (
-                  (val.type === "StringLiteral" && /^\d+\/\d+$/.test(val.value)) ||
+                  (val.type === "StringLiteral" &&
+                    /^\d+\/\d+$/.test(val.value)) ||
                   (val.type === "Identifier" && /^\d+\/\d+$/.test(val.name))
                 ) {
                   duration = {
@@ -352,20 +537,25 @@ export const parse = (text: string): ProgramNode => {
         type: "Trigger",
         name: `.${name}`,
         args: parsedArgs,
-        ...(duration ? { duration } : {})
+        ...(duration ? { duration } : {}),
       };
 
-      pushToBodyOrBlock(indent, trigger);
+      pushToBodyOrBlock(indent, trigger, lines[i], i);
       continue;
     }
 
-
-    const importMatch = trimmedLine.match(/^@import\s*\{\s*([^}]+)\s*\}\s*from\s*"([^"]+)"/);
+    const importMatch = trimmedLine.match(
+      /^@import\s*\{\s*([^}]+)\s*\}\s*from\s*"([^"]+)"/,
+    );
     if (importMatch) {
       const [, idList, fromPath] = importMatch;
       const identifiers = idList.split(",").map((s) => s.trim());
-      pushToBodyOrBlock(indent, { type: "ImportStatement", identifiers, from: fromPath });
-      i++;
+      pushToBodyOrBlock(
+        indent,
+        { type: "ImportStatement", identifiers, from: fromPath },
+        lines[i],
+        i,
+      );
       continue;
     }
 
@@ -373,74 +563,130 @@ export const parse = (text: string): ProgramNode => {
     if (exportMatch) {
       const [, idList] = exportMatch;
       const identifiers = idList.split(",").map((s) => s.trim());
-      pushToBodyOrBlock(indent, { type: "ExportStatement", identifiers });
-      i++;
+      pushToBodyOrBlock(
+        indent,
+        { type: "ExportStatement", identifiers },
+        lines[i],
+        i,
+      );
       continue;
     }
 
-    const loadMatch = trimmedLine.match(/^@load\s+"([^"]+)"\s+as\s+([a-zA-Z_][\w]*)/);
+    const loadMatch = trimmedLine.match(
+      /^@load\s+"([^"]+)"\s+as\s+([a-zA-Z_][\w]*)/,
+    );
     if (loadMatch) {
       const [, path, alias] = loadMatch;
-      pushToBodyOrBlock(indent, { type: "LoadSample", path, alias });
-      i++;
+      pushToBodyOrBlock(
+        indent,
+        { type: "LoadSample", path, alias },
+        lines[i],
+        i,
+      );
       continue;
     }
 
     const groupMatch = trimmedLine.match(/^group\s+([a-zA-Z_][\w]*)\s*:/);
     if (groupMatch) {
-      const group: GroupBlock = { type: "Group", name: groupMatch[1], body: [] };
+      const group: GroupBlock = {
+        type: "Group",
+        name: groupMatch[1],
+        body: [],
+      };
       body.push(group);
       stack.push({ type: "Group", indent, node: group, bodyIndent: null });
-      i++;
       continue;
     }
 
     const callMatch = trimmedLine.match(/^call\s+([a-zA-Z_][\w]*)$/);
     if (callMatch) {
       const call: CallStatement = { type: "Call", identifier: callMatch[1] };
-      pushToBodyOrBlock(indent, call);
-      i++;
+      pushToBodyOrBlock(indent, call, lines[i], i);
       continue;
     }
 
     const spawnMatch = trimmedLine.match(/^spawn\s+([a-zA-Z_][\w]*)$/);
     if (spawnMatch) {
-      const spawn: SpawnStatement = { type: "Spawn", identifier: spawnMatch[1] };
-      pushToBodyOrBlock(indent, spawn);
-      i++;
+      const spawn: SpawnStatement = {
+        type: "Spawn",
+        identifier: spawnMatch[1],
+      };
+      pushToBodyOrBlock(indent, spawn, lines[i], i);
       continue;
     }
 
     const sleepMatch = trimmedLine.match(/^sleep\s+(.*)$/);
     if (sleepMatch) {
       const expr = parseValue(sleepMatch[1]);
-      pushToBodyOrBlock(indent, { type: "Sleep", value: expr });
-      i++;
+      pushToBodyOrBlock(indent, { type: "Sleep", value: expr }, lines[i], i);
       continue;
     }
 
-    const arrowCallMatch = trimmedLine.match(/^([a-zA-Z_][\w]*)\s*->\s*([a-zA-Z_][\w]*)\((.*)\)$/);
-    if (arrowCallMatch) {
-      const [, target, method, argsStr] = arrowCallMatch;
-      const args = splitArguments(argsStr).map(parseValue);
-      pushToBodyOrBlock(indent, {
+    const arrowStart = trimmedLine.match(
+      /^([a-zA-Z_][\w]*)\s*->\s*([a-zA-Z_][\w]*)\((.*)$/,
+    );
+    if (arrowStart) {
+      const [, target, method, firstArgsPart] = arrowStart;
+      let argsAccum = firstArgsPart;
+      let depth = 0;
+      let inString = false;
+
+      for (let k = 0; k < argsAccum.length; k++) {
+        const ch = argsAccum[k];
+        if (ch === '"' && argsAccum[k - 1] !== "\\") inString = !inString;
+        if (!inString) {
+          if (ch === "(" || ch === "{" || ch === "[") depth++;
+          if (ch === ")" || ch === "}" || ch === "]") depth--;
+        }
+      }
+      // do not force depth; if it closed on same line, keep depth = 0
+
+      let j = i + 1;
+      while (depth > 0 && j < lines.length) {
+        const next = lines[j].trim();
+        for (let k = 0; k < next.length; k++) {
+          const c = next[k];
+          if (c === '"' && next[k - 1] !== "\\") inString = !inString;
+          if (!inString) {
+            if (c === "(" || c === "{" || c === "[") depth++;
+            if (c === ")" || c === "}" || c === "]") depth--;
+          }
+        }
+        argsAccum += " " + next;
+        j++;
+      }
+
+      i = j - 1;
+      if (argsAccum.endsWith(")")) {
+        const idx = argsAccum.lastIndexOf(")");
+        argsAccum = argsAccum.slice(0, idx);
+      }
+
+      const args = splitCallArguments(argsAccum);
+      const arrow: ArrowCallStatement = {
         type: "ArrowCall",
         target,
         method,
-        args
-      });
-      i++;
+        argsRaw: args,
+      };
+      pushToBodyOrBlock(indent, arrow, lines[i], i);
       continue;
     }
 
     while (
       stack.length > 0 &&
-      indent < (stack[stack.length - 1].bodyIndent ?? stack[stack.length - 1].indent)
+      indent <
+        (stack[stack.length - 1].bodyIndent ?? stack[stack.length - 1].indent)
     ) {
       stack.pop();
     }
 
-    pushToBodyOrBlock(indent, { type: "Unknown", value: trimmedLine });
+    pushToBodyOrBlock(
+      indent,
+      { type: "Unknown", value: trimmedLine },
+      lines[i],
+      i,
+    );
     continue;
   }
 
@@ -456,16 +702,17 @@ const splitArguments = (argStr: string): string[] => {
   for (let i = 0; i < argStr.length; i++) {
     const char = argStr[i];
 
-    if (char === '"' && argStr[i - 1] !== '\\') {
+    if (char === '"' && argStr[i - 1] !== "\\") {
       inString = !inString;
     }
 
     if (!inString) {
-      if (char === '{') depth++;
-      if (char === '}') depth--;
+      if (char === "{") depth++;
+      if (char === "}") depth--;
     }
 
-    const isSplitter = (char === " " || char === ",") && depth === 0 && !inString;
+    const isSplitter =
+      (char === " " || char === ",") && depth === 0 && !inString;
 
     if (isSplitter) {
       if (current.trim()) args.push(current.trim());
@@ -477,6 +724,31 @@ const splitArguments = (argStr: string): string[] => {
 
   if (current.trim()) args.push(current.trim());
 
+  return args;
+};
+
+// Split arrow call arguments by commas at top level (ignoring nested (), {}, [] and strings)
+const splitCallArguments = (argStr: string): string[] => {
+  const args: string[] = [];
+  let current = "";
+  let depth = 0;
+  let inString = false;
+
+  for (let i = 0; i < argStr.length; i++) {
+    const char = argStr[i];
+    if (char === '"' && argStr[i - 1] !== "\\") inString = !inString;
+    if (!inString) {
+      if (char === "(" || char === "{" || char === "[") depth++;
+      if (char === ")" || char === "}" || char === "]") depth--;
+    }
+    if (char === "," && depth === 0 && !inString) {
+      if (current.trim()) args.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) args.push(current.trim());
   return args;
 };
 

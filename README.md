@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://devalang.com/images/devalang-logo-cyan.svg" alt="Devalang Logo" width="300" />
+    <img src="https://devalang.com/images/devalang-logo-min.png" alt="Devalang Logo" width="100" />
 </div>
 
 ![TypeScript](https://img.shields.io/badge/Built%20with-TypeScript-blue?logo=typescript)
@@ -10,15 +10,12 @@
 
 ![NPM Downloads](https://img.shields.io/npm/dt/@devaloop/prettier-plugin-devalang)
 
+# 🦊 Devalang (Prettier Plugin) — Compose music with code
 
-# 🎶 [Devalang](https://github.com/devaloop-labs/devalang) (Prettier Plugin)
-
-🎶 Compose music with code — structured, expressive, and fast.
-
-[Devalang](https://github.com/devaloop-labs/devalang) is a tiny domain-specific language (DSL) for music makers, sound designers, and audio hackers.
+[Devalang](https://devalang.com) is a tiny domain-specific language (DSL) for music makers, sound designers, and audio hackers.
 Compose loops, control samples, render and play audio — all in clean, readable text.
 
-🦊 Whether you're building a track, shaping textures, or performing live, Devalang helps you think in rhythms. It’s designed to be simple, expressive, and fast — because your ideas shouldn’t wait.
+Whether you're building a track, shaping textures, or performing live, Devalang helps you think in rhythms. It’s designed to be simple, expressive, and fast — because your ideas shouldn’t wait.
 
 From studio sketches to live sets, Devalang gives you rhythmic control — with the elegance of code.
 
@@ -31,6 +28,7 @@ From studio sketches to live sets, Devalang gives you rhythmic control — with 
 - [📜 Changelog](https://github.com/devaloop-labs/devalang/blob/main/docs/CHANGELOG.md)
 - [💡 Examples](https://github.com/devaloop-labs/devalang/tree/main/examples)
 - [🌐 Project Website](https://devalang.com)
+- [📦 Devaforge on npm](https://www.npmjs.com/package/@devaloop/devaforge)
 - [📦 Devalang CLI on npm](https://www.npmjs.com/package/@devaloop/devalang)
 
 ## Features
@@ -86,7 +84,7 @@ Here's an example of how to format a Devalang file using the plugin:
 
 .trigger 1/4 {
   drive:50
-}
+.trigger 1/4 { drive: 50 }
 
 loop 10:
 .trigger 1/8 params

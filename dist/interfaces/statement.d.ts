@@ -12,6 +12,7 @@ export interface BpmDeclaration {
 export interface BankDeclaration {
     type: "BankDeclaration";
     identifier: string;
+    alias?: string;
 }
 export interface LetDeclaration {
     type: "LetDeclaration";
@@ -50,6 +51,10 @@ export interface NumberLiteral {
 }
 export interface StringLiteral {
     type: "StringLiteral";
+    value: string;
+}
+export interface RawLiteral {
+    type: "RawLiteral";
     value: string;
 }
 export interface BooleanLiteral {
@@ -126,14 +131,39 @@ export interface ArrowCallStatement {
     type: "ArrowCall";
     target: string;
     method: string;
-    args: Expression[];
+    argsRaw?: string[];
+}
+export interface UsePluginStatement {
+    type: "UsePlugin";
+    name: string;
+    alias?: string;
+}
+export interface OnBlock {
+    type: "On";
+    event: string;
+    body: Node[];
+}
+export interface EmitStatement {
+    type: "Emit";
+    name: string;
+    payload?: string;
+}
+export interface PrintStatement {
+    type: "Print";
+    expression: string;
+}
+export interface FnBlock {
+    type: "Fn";
+    name: string;
+    params: string;
+    body: Node[];
 }
 /**
  * Context for statement blocks
  * This is used to track the current block type and indentation level
  */
 export interface BlockContext {
-    type: "Loop" | "Group" | "If" | "ElseIf" | "Else";
+    type: "Loop" | "Group" | "If" | "ElseIf" | "Else" | "On" | "Fn";
     indent: number;
     node: {
         body: Node[];

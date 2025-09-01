@@ -3,93 +3,99 @@ import { Expression } from "../types/expression";
 import { Node } from "../types/node";
 
 export interface ProgramNode {
-    type: "Program";
-    body: Node[];
+  type: "Program";
+  body: Node[];
 }
 
 export interface BpmDeclaration {
-    type: "BpmDeclaration";
-    identifier: string;
+  type: "BpmDeclaration";
+  identifier: string;
 }
 
 export interface BankDeclaration {
-    type: "BankDeclaration";
-    identifier: string;
+  type: "BankDeclaration";
+  identifier: string;
+  alias?: string;
 }
 
 export interface LetDeclaration {
-    type: "LetDeclaration";
-    name: string;
-    value: Expression;
+  type: "LetDeclaration";
+  name: string;
+  value: Expression;
 }
 
 export interface LoopBlock {
-    type: "Loop";
-    iterator: {
-        type: "Identifier" | "NumberLiteral" | undefined;
-        value: number | string;
-    },
-    body: Node[];
+  type: "Loop";
+  iterator: {
+    type: "Identifier" | "NumberLiteral" | undefined;
+    value: number | string;
+  };
+  body: Node[];
 }
 
 export interface ImportStatement {
-    type: "ImportStatement";
-    identifiers: string[];
-    from: string;
+  type: "ImportStatement";
+  identifiers: string[];
+  from: string;
 }
 
 export interface ExportStatement {
-    type: "ExportStatement";
-    identifiers: string[];
+  type: "ExportStatement";
+  identifiers: string[];
 }
 
 export interface LoadStatement {
-    type: "LoadSample";
-    path: string;
-    alias: string;
+  type: "LoadSample";
+  path: string;
+  alias: string;
 }
 
 export interface Identifier {
-    type: "Identifier";
-    name: string;
+  type: "Identifier";
+  name: string;
 }
 
 export interface NumberLiteral {
-    type: "NumberLiteral";
-    value: number;
+  type: "NumberLiteral";
+  value: number;
 }
 
 export interface StringLiteral {
-    type: "StringLiteral";
-    value: string;
+  type: "StringLiteral";
+  value: string;
+}
+
+export interface RawLiteral {
+  type: "RawLiteral";
+  value: string; // raw, can be multi-line
 }
 
 export interface BooleanLiteral {
-    type: "BooleanLiteral";
-    value: boolean;
+  type: "BooleanLiteral";
+  value: boolean;
 }
 
 export interface ObjectLiteral {
-    type: "ObjectLiteral";
-    properties: ObjectProperty[];
+  type: "ObjectLiteral";
+  properties: ObjectProperty[];
 }
 
 export interface ObjectProperty {
-    type: "ObjectProperty";
-    key: string;
-    value: Expression;
+  type: "ObjectProperty";
+  key: string;
+  value: Expression;
 }
 
 export type SynthReference = {
-    type: "SynthReference";
-    name: string;
+  type: "SynthReference";
+  name: string;
 };
 
 export type ArrowCall = {
-    type: "ArrowCall";
-    target: Expression;
-    method: string;
-    args: any[];
+  type: "ArrowCall";
+  target: Expression;
+  method: string;
+  args: any[];
 };
 
 /**
@@ -97,63 +103,93 @@ export type ArrowCall = {
  */
 
 export interface TriggerCall {
-    type: "Trigger";
-    name: string;
-    duration?: DurationValue;
-    args: Expression[];
+  type: "Trigger";
+  name: string;
+  duration?: DurationValue;
+  args: Expression[];
 }
 
 export interface Comment {
-    type: "Comment";
-    value: string;
+  type: "Comment";
+  value: string;
 }
 
 export interface Unknown {
-    type: "Unknown";
-    value: string;
+  type: "Unknown";
+  value: string;
 }
 
 export interface BlankLine {
-    type: "BlankLine";
+  type: "BlankLine";
 }
 
 export interface GroupBlock {
-    type: "Group";
-    name: string;
-    body: Node[];
+  type: "Group";
+  name: string;
+  body: Node[];
 }
 
 export interface CallStatement {
-    type: "Call";
-    identifier: string;
+  type: "Call";
+  identifier: string;
 }
 
 export interface SpawnStatement {
-    type: "Spawn";
-    identifier: string;
+  type: "Spawn";
+  identifier: string;
 }
 
 export interface SleepStatement {
-    type: "Sleep";
-    value: Expression;
+  type: "Sleep";
+  value: Expression;
 }
 
 export interface IfStatement {
-    type: "If";
+  type: "If";
+  condition: string;
+  body: Node[];
+  elseIfs: {
     condition: string;
     body: Node[];
-    elseIfs: {
-        condition: string;
-        body: Node[];
-    }[];
-    alternate?: Node[];
+  }[];
+  alternate?: Node[];
 }
 
 export interface ArrowCallStatement {
-    type: "ArrowCall";
-    target: string;
-    method: string;
-    args: Expression[];
+  type: "ArrowCall";
+  target: string;
+  method: string;
+  argsRaw?: string[];
+}
+
+export interface UsePluginStatement {
+  type: "UsePlugin";
+  name: string;
+  alias?: string;
+}
+
+export interface OnBlock {
+  type: "On";
+  event: string;
+  body: Node[];
+}
+
+export interface EmitStatement {
+  type: "Emit";
+  name: string;
+  payload?: string; // raw
+}
+
+export interface PrintStatement {
+  type: "Print";
+  expression: string; // raw
+}
+
+export interface FnBlock {
+  type: "Fn";
+  name: string;
+  params: string; // raw inside parentheses
+  body: Node[];
 }
 
 /**
@@ -161,8 +197,8 @@ export interface ArrowCallStatement {
  * This is used to track the current block type and indentation level
  */
 export interface BlockContext {
-    type: "Loop" | "Group" | "If" | "ElseIf" | "Else";
-    indent: number;
-    node: { body: Node[] };
-    bodyIndent: number | null;
+  type: "Loop" | "Group" | "If" | "ElseIf" | "Else" | "On" | "Fn";
+  indent: number;
+  node: { body: Node[] };
+  bodyIndent: number | null;
 }

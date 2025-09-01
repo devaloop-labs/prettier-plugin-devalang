@@ -1,0 +1,8 @@
+# This file demonstrates the usage of patterns in Devaloop
+
+bank devaloop.808 as my808
+
+# Pattern literal without options
+pattern kickPattern with my808.kick = "x--- x--- x--- x---"
+
+call kickPattern

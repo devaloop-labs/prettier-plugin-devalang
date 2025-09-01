@@ -1,33 +1,20 @@
-@import { duration, default_bank, params, loopCount, tempo } from "./examples/variables.deva"
-@import { myGroup } from "./examples/group.deva"
+# This file demonstrates the use of conditional blocks in Devalang.
 
-@load "./examples/samples/kick-808.wav" as kickCustom
-@load "./examples/samples/hat-808.wav" as hatCustom
+@import { duration, default_bank, params, loopCount, tempo } from "./variables.deva"
+@import { myGroup } from "./group.deva"
 
-bpm tempo
+@load "./samples/kick-808.wav" as kickCustom
+@load "./samples/hat-808.wav" as hatCustom
 
-bank default_bank
+group conditionBlock:
+    if tempo > 120:
+        # Will be executed if the condition is true
+        .kickCustom auto
+    
+        # Will be executed if the condition is false
+        .hatCustom auto
+    
+        .kickCustom auto
+        .hatCustom auto
 
-# Will be executed line by line (sequentially)
-call myGroup
-
-# Will be executed in parallel (concurrently)
-# spawn myGroup
-
-if loopCount > 0:
-    .kickCustom duration params
-    .hatCustom duration params
-else if loopCount == 0:
-    .kickCustom duration params
-    .hatCustom duration params
-else:
-    .kickCustom duration params
-    .hatCustom duration params
-
-group myGroup:
-    .kickCustom duration params
-    .hatCustom duration params
-
-loop 10:
-    .kickCustom duration params
-    .hatCustom duration params
+@export { conditionBlock }
