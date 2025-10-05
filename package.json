@@ -1,7 +1,7 @@
 {
   "name": "@devaloop/prettier-plugin-devalang",
   "private": false,
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "dist/index.js",
   "homepage": "https://devalang.com",
   "repository": {
@@ -12,6 +12,11 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node test/index.js",
+    "test:v2": "npm run build && node test/test-v2.js",
+    "test:chains": "npm run build && node test/test-chains.js",
+    "test:blanks": "npm run build && node test/test-blanks.js",
+    "test:all": "npm run build && node test/test-all.js",
+    "demo": "npm run build && node test/demo.js",
     "prettier": "npm run build && prettier --plugin ./dist/index.js --write .",
     "prettier:check": "npm run build && prettier --plugin ./dist/index.js --check ."
   },
@@ -29,5 +34,8 @@
   "dependencies": {
     "@types/node": "^24.0.10",
     "prettier": "^3.6.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

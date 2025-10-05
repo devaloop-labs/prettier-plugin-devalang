@@ -87,32 +87,56 @@ const print = (path, options, print) => {
                 const nodeAt = lineMap[i];
                 if (!nodeAt)
                     continue;
+                // Skip blank lines to preserve them as-is
+                if (nodeAt.type === "BlankLine")
+                    continue;
                 // get formatted representation for that node
                 const printerModule = require("./printer");
                 const printed = printerModule.print({ getValue: () => nodeAt }, options, printerModule.print);
                 if (printed === undefined)
                     continue;
                 const str = Array.isArray(printed) ? printed.join("") : String(printed);
-                // only replace if single-line and fits the width
-                if (!str.includes("\n")) {
+                // Only replace if it's a single-line statement
+                // Multi-line blocks (loop, group, if, etc.) are handled separately
+                const isMultiLineBlock = [
+                    "Loop",
+                    "Group",
+                    "If",
+                    "On",
+                    "Fn",
+                    "For",
+                    "Automate",
+                ].includes(nodeAt.type);
+                // ArrowCall with chain should always be formatted as multi-line
+                const isChainedArrowCall = nodeAt.type === "ArrowCall" && nodeAt.chain && nodeAt.chain.length > 0;
+                if (!isMultiLineBlock && !isChainedArrowCall && !str.includes("\n")) {
                     const leading = nodeAt._leading || "";
                     // remove any leading spaces from the printed output to avoid double-indenting
                     const printedTrimmed = str.replace(/^\s+/, "");
                     const totalLen = leading.length + printedTrimmed.length;
+                    // Only replace if the formatted version is different and fits within width
                     if (totalLen <= maxWidth) {
-                        outLines[i] = leading + printedTrimmed;
+                        const newLine = leading + printedTrimmed;
+                        // Only update if there's an actual change to maintain idempotence
+                        if (outLines[i] !== newLine) {
+                            outLines[i] = newLine;
+                        }
                     }
+                }
+                else if (isChainedArrowCall) {
+                    // For chained arrow calls, replace the entire line with the formatted multi-line version
+                    const leading = nodeAt._leading || "";
+                    const lines = str.split("\n");
+                    // Replace the current line with all chain lines
+                    outLines[i] = leading + lines.join("\n" + leading);
                 }
             }
             const srcText = parserModule.SOURCE_TEXT || "";
             const hasTrailingNewline = srcText.endsWith("\n") || srcText.endsWith("\r\n");
             const joined = outLines.join("\n");
-            // if joined already ends with an empty line because outLines ended with '',
-            // do not append another newline. Otherwise append if source had trailing newline.
-            if (hasTrailingNewline) {
-                return joined.endsWith("\n") || joined.endsWith("\r\n")
-                    ? joined
-                    : joined + "\n";
+            // Always ensure a blank line at EOF
+            if (!joined.endsWith("\n")) {
+                return joined + "\n";
             }
             return joined;
         }
@@ -203,6 +227,29 @@ const print = (path, options, print) => {
             return "";
         case "ArrowCall":
             return indentSpaces + printArrowCall(node);
+        case "Pattern":
+            return (indentSpaces +
+                `pattern ${node.name} with ${node.instrument} = "${node.pattern}"`);
+        case "For": {
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `for ${node.variable} in ${node.iterator}:\n${blockStr}`
+                : indentSpaces + `for ${node.variable} in ${node.iterator}:`;
+        }
+        case "Automate": {
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `automate ${node.target}:\n${blockStr}`
+                : indentSpaces + `automate ${node.target}:`;
+        }
+        case "Param": {
+            const blockStr = (0, parser_1.parseBlock)(node.body);
+            return blockStr
+                ? indentSpaces + `param ${node.name} {\n${blockStr}\n${indentSpaces}}`
+                : indentSpaces + `param ${node.name} {}`;
+        }
+        case "Keyframe":
+            return indentSpaces + `${node.position} = ${node.value}`;
         default:
             throw new Error(`Unsupported node type: ${node.type}`);
     }
@@ -210,9 +257,38 @@ const print = (path, options, print) => {
 exports.print = print;
 const printArrowCall = (call) => {
     const target = call.target;
+    // If this is a chain, format each call on its own line
+    if (call.chain && call.chain.length > 0) {
+        const lines = [];
+        // First call on the first line
+        const firstCall = call.chain[0];
+        const firstArgs = firstCall.args.map((s) => s.trim()).filter(Boolean);
+        lines.push(`${target} -> ${firstCall.method}(${firstArgs.join(", ")})`);
+        // Subsequent calls indented with ->
+        for (let i = 1; i < call.chain.length; i++) {
+            const chainCall = call.chain[i];
+            const chainArgs = chainCall.args.map((s) => s.trim()).filter(Boolean);
+            lines.push(`    -> ${chainCall.method}(${chainArgs.join(", ")})`);
+        }
+        return lines.join("\n");
+    }
+    // Single arrow call
     const func = call.method;
     const args = (call.argsRaw || []).map((s) => s.trim()).filter(Boolean);
-    return `${target} -> ${func}(${args.join(", ")})`;
+    const singleLine = `${target} -> ${func}(${args.join(", ")})`;
+    // If args fit on one line (under 60 chars), keep them on one line
+    if (singleLine.length <= 60 || args.length <= 2) {
+        return singleLine;
+    }
+    // Multi-line format for long argument lists
+    const formattedArgs = args
+        .map((arg, i) => {
+        if (i === 0)
+            return arg;
+        return `\n    ${arg}`;
+    })
+        .join(", ");
+    return `${target} -> ${func}(${formattedArgs})`;
 };
 const printArguments = (args) => {
     if (args.length === 0)

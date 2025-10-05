@@ -22,6 +22,11 @@ import {
   EmitStatement,
   PrintStatement,
   FnBlock,
+  PatternStatement,
+  ForStatement,
+  AutomateBlock,
+  ParamBlock,
+  KeyframeStatement,
 } from "../interfaces/statement";
 
 export type Node =
@@ -47,4 +52,9 @@ export type Node =
   | OnBlock
   | EmitStatement
   | PrintStatement
-  | FnBlock;
+  | FnBlock
+  | PatternStatement
+  | ForStatement
+  | AutomateBlock
+  | ParamBlock
+  | KeyframeStatement;

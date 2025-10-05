@@ -136,6 +136,9 @@ const parse = (text) => {
             "loop ",
             "on ",
             "fn ",
+            "for ",
+            "automate ",
+            "pattern ",
         ];
         const isHeaderLike = headerStarts.some((h) => trimmedLine.startsWith(h));
         if (isHeaderLike) {
@@ -486,55 +489,201 @@ const parse = (text) => {
             pushToBodyOrBlock(indent, { type: "Sleep", value: expr }, lines[i], i);
             continue;
         }
-        const arrowStart = trimmedLine.match(/^([a-zA-Z_][\w]*)\s*->\s*([a-zA-Z_][\w]*)\((.*)$/);
-        if (arrowStart) {
-            const [, target, method, firstArgsPart] = arrowStart;
-            let argsAccum = firstArgsPart;
-            let depth = 0;
-            let inString = false;
-            for (let k = 0; k < argsAccum.length; k++) {
-                const ch = argsAccum[k];
-                if (ch === '"' && argsAccum[k - 1] !== "\\")
-                    inString = !inString;
-                if (!inString) {
-                    if (ch === "(" || ch === "{" || ch === "[")
-                        depth++;
-                    if (ch === ")" || ch === "}" || ch === "]")
-                        depth--;
-                }
+        // pattern <name> with <instrument> = "<pattern>"
+        const patternMatch = trimmedLine.match(/^pattern\s+([a-zA-Z_][\w]*)\s+with\s+([^\s=]+)\s*=\s*"([^"]*)"/);
+        if (patternMatch) {
+            const [, name, instrument, pattern] = patternMatch;
+            const patternStmt = {
+                type: "Pattern",
+                name,
+                instrument,
+                pattern,
+            };
+            pushToBodyOrBlock(indent, patternStmt, lines[i], i);
+            continue;
+        }
+        // for <variable> in <iterator>:
+        const forMatch = trimmedLine.match(/^for\s+([a-zA-Z_][\w]*)\s+in\s+(.+):$/);
+        if (forMatch) {
+            const [, variable, iterator] = forMatch;
+            const forNode = {
+                type: "For",
+                variable,
+                iterator: iterator.trim(),
+                body: [],
+            };
+            pushToBodyOrBlock(indent, forNode, lines[i], i);
+            stack.push({ type: "For", indent, node: forNode, bodyIndent: null });
+            continue;
+        }
+        // automate <target>:
+        const automateMatch = trimmedLine.match(/^automate\s+([a-zA-Z_][\w]*)\s*:$/);
+        if (automateMatch) {
+            const automateNode = {
+                type: "Automate",
+                target: automateMatch[1],
+                body: [],
+            };
+            pushToBodyOrBlock(indent, automateNode, lines[i], i);
+            stack.push({
+                type: "Automate",
+                indent,
+                node: automateNode,
+                bodyIndent: null,
+            });
+            continue;
+        }
+        // param <name> { ... }
+        const paramMatch = trimmedLine.match(/^param\s+([a-zA-Z_][\w]*)\s*{/);
+        if (paramMatch) {
+            const paramNode = {
+                type: "Param",
+                name: paramMatch[1],
+                body: [],
+            };
+            pushToBodyOrBlock(indent, paramNode, lines[i], i);
+            stack.push({ type: "Param", indent, node: paramNode, bodyIndent: null });
+            continue;
+        }
+        // Keyframe: 0% = 0.5 or 100%: 1.0
+        const keyframeMatch = trimmedLine.match(/^(\d+%)\s*[=:]\s*(.+)$/);
+        if (keyframeMatch) {
+            const [, position, value] = keyframeMatch;
+            const keyframeStmt = {
+                type: "Keyframe",
+                position,
+                value: value.trim(),
+            };
+            pushToBodyOrBlock(indent, keyframeStmt, lines[i], i);
+            continue;
+        }
+        // Closing brace for param blocks
+        if (trimmedLine === "}") {
+            // Close the innermost Param block
+            while (stack.length > 0 && stack[stack.length - 1].type === "Param") {
+                stack.pop();
             }
-            // do not force depth; if it closed on same line, keep depth = 0
-            let j = i + 1;
-            while (depth > 0 && j < lines.length) {
-                const next = lines[j].trim();
-                for (let k = 0; k < next.length; k++) {
-                    const c = next[k];
-                    if (c === '"' && next[k - 1] !== "\\")
+            continue;
+        }
+        const arrowStart = trimmedLine.match(/^([a-zA-Z_][\w]*)\s*->\s*/);
+        if (arrowStart) {
+            const target = arrowStart[1];
+            // Check if this line contains multiple arrow calls (chain)
+            const fullLine = trimmedLine;
+            const arrowCount = (fullLine.match(/->/g) || []).length;
+            if (arrowCount > 1) {
+                // This is a chain - split by -> and parse each call
+                const calls = [];
+                // Split by -> but preserve parentheses content
+                const parts = [];
+                let current = "";
+                let depth = 0;
+                let inString = false;
+                for (let k = 0; k < fullLine.length; k++) {
+                    const ch = fullLine[k];
+                    if (ch === '"' && fullLine[k - 1] !== "\\")
                         inString = !inString;
                     if (!inString) {
-                        if (c === "(" || c === "{" || c === "[")
+                        if (ch === "(" || ch === "{" || ch === "[")
                             depth++;
-                        if (c === ")" || c === "}" || c === "]")
+                        if (ch === ")" || ch === "}" || ch === "]")
+                            depth--;
+                    }
+                    if (ch === "-" && fullLine[k + 1] === ">" && depth === 0 && !inString) {
+                        if (current.trim())
+                            parts.push(current.trim());
+                        current = "";
+                        k++; // skip '>'
+                    }
+                    else {
+                        current += ch;
+                    }
+                }
+                if (current.trim())
+                    parts.push(current.trim());
+                // First part is the target
+                const chainTarget = parts[0];
+                // Parse each subsequent call
+                for (let p = 1; p < parts.length; p++) {
+                    const part = parts[p].trim();
+                    const callMatch = part.match(/^([a-zA-Z_][\w]*)\s*\(([^)]*)\)\s*$/);
+                    if (callMatch) {
+                        const [, methodName, argsStr] = callMatch;
+                        const args = argsStr.trim() ? splitCallArguments(argsStr.trim()) : [];
+                        calls.push({ method: methodName, args });
+                    }
+                    else {
+                        // Try without closing paren (multi-line case)
+                        const partialMatch = part.match(/^([a-zA-Z_][\w]*)\s*\((.*)/);
+                        if (partialMatch) {
+                            const [, methodName, argsStr] = partialMatch;
+                            const args = argsStr.trim() ? splitCallArguments(argsStr.trim()) : [];
+                            calls.push({ method: methodName, args });
+                        }
+                    }
+                }
+                if (calls.length > 0) {
+                    const arrow = {
+                        type: "ArrowCall",
+                        target: chainTarget,
+                        method: calls[0].method,
+                        argsRaw: calls[0].args,
+                        chain: calls,
+                    };
+                    pushToBodyOrBlock(indent, arrow, lines[i], i);
+                    continue;
+                }
+            }
+            // Single arrow call - original logic
+            const singleMatch = trimmedLine.match(/^([a-zA-Z_][\w]*)\s*->\s*([a-zA-Z_][\w]*)\((.*)$/);
+            if (singleMatch) {
+                const [, singleTarget, method, firstArgsPart] = singleMatch;
+                let argsAccum = firstArgsPart;
+                let depth = 0;
+                let inString = false;
+                for (let k = 0; k < argsAccum.length; k++) {
+                    const ch = argsAccum[k];
+                    if (ch === '"' && argsAccum[k - 1] !== "\\")
+                        inString = !inString;
+                    if (!inString) {
+                        if (ch === "(" || ch === "{" || ch === "[")
+                            depth++;
+                        if (ch === ")" || ch === "}" || ch === "]")
                             depth--;
                     }
                 }
-                argsAccum += " " + next;
-                j++;
+                let j = i + 1;
+                while (depth > 0 && j < lines.length) {
+                    const next = lines[j].trim();
+                    for (let k = 0; k < next.length; k++) {
+                        const c = next[k];
+                        if (c === '"' && next[k - 1] !== "\\")
+                            inString = !inString;
+                        if (!inString) {
+                            if (c === "(" || c === "{" || c === "[")
+                                depth++;
+                            if (c === ")" || c === "}" || c === "]")
+                                depth--;
+                        }
+                    }
+                    argsAccum += " " + next;
+                    j++;
+                }
+                i = j - 1;
+                if (argsAccum.endsWith(")")) {
+                    const idx = argsAccum.lastIndexOf(")");
+                    argsAccum = argsAccum.slice(0, idx);
+                }
+                const args = splitCallArguments(argsAccum);
+                const arrow = {
+                    type: "ArrowCall",
+                    target: singleTarget,
+                    method,
+                    argsRaw: args,
+                };
+                pushToBodyOrBlock(indent, arrow, lines[i], i);
+                continue;
             }
-            i = j - 1;
-            if (argsAccum.endsWith(")")) {
-                const idx = argsAccum.lastIndexOf(")");
-                argsAccum = argsAccum.slice(0, idx);
-            }
-            const args = splitCallArguments(argsAccum);
-            const arrow = {
-                type: "ArrowCall",
-                target,
-                method,
-                argsRaw: args,
-            };
-            pushToBodyOrBlock(indent, arrow, lines[i], i);
-            continue;
         }
         while (stack.length > 0 &&
             indent <

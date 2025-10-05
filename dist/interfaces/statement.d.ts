@@ -132,6 +132,10 @@ export interface ArrowCallStatement {
     target: string;
     method: string;
     argsRaw?: string[];
+    chain?: {
+        method: string;
+        args: string[];
+    }[];
 }
 export interface UsePluginStatement {
     type: "UsePlugin";
@@ -158,12 +162,39 @@ export interface FnBlock {
     params: string;
     body: Node[];
 }
+export interface PatternStatement {
+    type: "Pattern";
+    name: string;
+    instrument: string;
+    pattern: string;
+}
+export interface ForStatement {
+    type: "For";
+    variable: string;
+    iterator: string;
+    body: Node[];
+}
+export interface AutomateBlock {
+    type: "Automate";
+    target: string;
+    body: Node[];
+}
+export interface ParamBlock {
+    type: "Param";
+    name: string;
+    body: Node[];
+}
+export interface KeyframeStatement {
+    type: "Keyframe";
+    position: string;
+    value: string;
+}
 /**
  * Context for statement blocks
  * This is used to track the current block type and indentation level
  */
 export interface BlockContext {
-    type: "Loop" | "Group" | "If" | "ElseIf" | "Else" | "On" | "Fn";
+    type: "Loop" | "Group" | "If" | "ElseIf" | "Else" | "On" | "Fn" | "For" | "Automate" | "Param";
     indent: number;
     node: {
         body: Node[];
